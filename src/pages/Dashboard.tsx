@@ -36,8 +36,12 @@ export function Dashboard() {
       
       {/* App Header / Nav */}
       <nav className="w-full bg-white border-b border-gray-200/60 px-6 md:px-12 h-[80px] flex items-center justify-between sticky top-0 z-50">
-        <Link to="/" className="font-satoshi text-2xl font-bold tracking-tight text-[#0033AD]">
-          BlueSense <span className="text-sm font-medium text-blue-400 ml-2 border border-blue-200 bg-blue-50 px-2 py-0.5 rounded-full">App</span>
+        <Link to="/" className="flex items-center gap-2.5">
+          <img src="/images/onramper-hero-orb.svg" alt="BlueSense" className="w-6 h-6 object-contain opacity-90" />
+          <span className="font-satoshi text-2xl font-bold tracking-tight text-[#0033AD]">
+            BlueSense
+          </span>
+          <span className="text-sm font-medium text-blue-400 ml-1 border border-blue-200 bg-blue-50 px-2 py-0.5 rounded-full">App</span>
         </Link>
         <button className="flex items-center gap-2 h-[44px] rounded-full bg-[#0033AD] px-6 text-[14px] font-semibold text-white shadow-md transition-all hover:bg-blue-800 hover:shadow-lg active:scale-95">
           <Wallet weight="bold" className="text-lg" /> Connect Wallet

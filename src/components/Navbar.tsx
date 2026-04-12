@@ -13,7 +13,8 @@ export function Navbar() {
       <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between px-6 md:px-12 pointer-events-none relative">
         
         {/* Left: Logo Pill */}
-        <div className="pointer-events-auto flex z-10 h-[52px] items-center justify-center rounded-full bg-white px-8 shadow-sm">
+        <div className="pointer-events-auto flex z-10 h-[52px] items-center justify-center gap-2.5 rounded-full bg-white pl-6 pr-8 shadow-sm">
+          <img src="/images/onramper-hero-orb.svg" alt="BlueSense Logo" className="w-[22px] h-[22px] object-contain opacity-90" />
           <span className="font-satoshi text-2xl font-bold tracking-tight text-[#0033AD]">
             BlueSense
           </span>

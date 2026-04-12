@@ -1,13 +1,16 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Navbar } from "./components/Navbar"
 import { Hero } from "./components/Hero"
+import { BlueSenseFeatures } from "./components/BlueSenseFeatures"
 import { Dashboard } from "./pages/Dashboard"
+import "./bluesense.css"
 
 function Landing() {
   return (
-    <div className="w-full bg-[#0A3FFF] min-h-screen selection:bg-white/20 selection:text-white">
+    <div className="w-full bg-[#0A3FFF] min-h-screen selection:bg-white/20 selection:text-white pb-0">
       <Navbar />
       <Hero />
+      <BlueSenseFeatures />
     </div>
   )
 }
