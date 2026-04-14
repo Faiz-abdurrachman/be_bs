@@ -44,7 +44,7 @@ export function Navbar() {
             View Demo
           </button>
           <Link 
-            to="/dashboard"
+            to="/vault"
             className="font-sans flex h-[52px] items-center rounded-full bg-[#0033AD] px-8 text-[15px] font-semibold text-white shadow-xl transition-transform active:scale-95 hover:bg-blue-800"
           >
             Start Earning

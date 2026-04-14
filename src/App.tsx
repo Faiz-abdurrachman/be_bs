@@ -3,6 +3,7 @@ import { Navbar } from "./components/Navbar"
 import { Hero } from "./components/Hero"
 import { BlueSenseFeatures } from "./components/BlueSenseFeatures"
 import { Dashboard } from "./pages/Dashboard"
+import { Portfolio } from "./pages/Portfolio"
 import "./bluesense.css"
 
 function Landing() {
@@ -20,7 +21,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Landing />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/vault" element={<Dashboard />} />
+        <Route path="/portfolio" element={<Portfolio />} />
       </Routes>
     </BrowserRouter>
   )
