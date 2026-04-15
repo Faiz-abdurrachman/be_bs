@@ -1,7 +1,28 @@
 import { Link } from "react-router-dom";
-import { CaretDown, Wallet, Moon, CheckCircle } from "@phosphor-icons/react";
+import { CaretDown, Moon, CheckCircle } from "@phosphor-icons/react";
+import { useWallet, useLovelace, useAssets } from "@meshsdk/react";
+import { WalletConnect } from "../components/WalletConnect";
+
+function lovelaceToAda(lovelace: string | undefined): string {
+  if (!lovelace) return "0.00";
+  return (parseInt(lovelace) / 1_000_000).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function shortenAddress(addr: string): string {
+  if (!addr) return "";
+  return addr.slice(0, 12) + "..." + addr.slice(-8);
+}
 
 export function Portfolio() {
+  const { connected, address } = useWallet();
+  const lovelace = useLovelace();
+  const assets = useAssets();
+
+  const ssAdaAssets = assets?.filter(a => a.unit.includes("ssADA") || a.assetName?.toLowerCase().includes("ssada")) ?? [];
+
   const recommendations = [
     {
       id: "ssADA",
@@ -66,9 +87,7 @@ export function Portfolio() {
               <Moon size={20} weight="regular" />
            </button>
            <div className="w-px h-6 bg-gray-200 mx-1" />
-           <button className="flex items-center gap-2 h-10 rounded-lg bg-[#000] px-5 ml-1 text-[14px] font-semibold text-white shadow-sm transition-all hover:bg-gray-800">
-             <Wallet size={18} /> Connect wallet
-           </button>
+           <WalletConnect />
         </div>
       </nav>
 
@@ -93,13 +112,60 @@ export function Portfolio() {
            <h2 className="text-[22px] font-bold text-gray-900 mb-1 leading-tight">Your Vaults</h2>
            <p className="text-[15px] text-gray-500 mb-6">Track every BlueSense position you currently hold.</p>
 
-           <div className="w-full bg-white rounded-xl border border-gray-200 py-24 flex flex-col items-center justify-center text-center shadow-sm">
-              <h3 className="text-[17px] font-bold text-gray-900 mb-3">Connect a wallet to view your vaults</h3>
-              <p className="text-[14px] text-gray-500 mb-8">See all your BlueSense deposits in one place.</p>
-              <button className="flex items-center h-12 rounded-lg bg-[#000] px-8 text-[15px] font-bold text-white shadow-md transition-all hover:bg-gray-800">
-                Connect wallet
-              </button>
-           </div>
+           {!connected ? (
+             <div className="w-full bg-white rounded-xl border border-gray-200 py-24 flex flex-col items-center justify-center text-center shadow-sm">
+               <h3 className="text-[17px] font-bold text-gray-900 mb-3">Connect a wallet to view your vaults</h3>
+               <p className="text-[14px] text-gray-500 mb-8">See all your BlueSense deposits in one place.</p>
+               <WalletConnect />
+             </div>
+           ) : (
+             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+               {/* Wallet summary bar */}
+               <div className="px-6 py-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+                 <div>
+                   <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider mb-1">Connected Wallet</p>
+                   <p className="font-mono text-[14px] text-gray-700">{shortenAddress(address)}</p>
+                 </div>
+                 <div className="flex gap-8">
+                   <div>
+                     <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider mb-1">ADA Balance</p>
+                     <p className="text-[20px] font-bold text-gray-900">{lovelaceToAda(lovelace)} ₳</p>
+                   </div>
+                   {ssAdaAssets.length > 0 && (
+                     <div>
+                       <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider mb-1">ssADA Held</p>
+                       <p className="text-[20px] font-bold text-[#0033AD]">{ssAdaAssets[0].quantity}</p>
+                     </div>
+                   )}
+                 </div>
+               </div>
+
+               {/* Positions */}
+               {ssAdaAssets.length > 0 ? (
+                 <div className="p-6">
+                   {ssAdaAssets.map((asset, i) => (
+                     <div key={i} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
+                       <div className="flex items-center gap-3">
+                         <img src="/images/onramper-hero-orb.svg" className="w-8 h-8 opacity-90" />
+                         <div>
+                           <p className="font-bold text-[15px] text-gray-900">{asset.assetName || "ssADA"}</p>
+                           <p className="text-[12px] text-gray-400 font-mono">{asset.unit.slice(0, 20)}...</p>
+                         </div>
+                       </div>
+                       <p className="font-bold text-[16px] text-[#0033AD]">{asset.quantity}</p>
+                     </div>
+                   ))}
+                 </div>
+               ) : (
+                 <div className="py-16 text-center">
+                   <p className="text-[15px] text-gray-500 mb-2">No BlueSense positions yet.</p>
+                   <Link to="/vault" className="text-[14px] font-semibold text-[#0033AD] hover:underline">
+                     Deposit ADA to get started →
+                   </Link>
+                 </div>
+               )}
+             </div>
+           )}
         </div>
 
         {/* Recommended Grids */}

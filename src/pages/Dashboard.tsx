@@ -1,16 +1,26 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { CaretDown, Wallet, Moon, MagnifyingGlass, CheckCircle, Copy, Faders, ArrowsLeftRight } from "@phosphor-icons/react";
+import { CaretDown, Moon, MagnifyingGlass, CheckCircle, Copy, Faders, ArrowsLeftRight } from "@phosphor-icons/react";
+import { useWallet, useLovelace } from "@meshsdk/react";
+import { WalletConnect } from "../components/WalletConnect";
+
+function lovelaceToAda(lovelace: string | undefined): number {
+  if (!lovelace) return 0;
+  return parseInt(lovelace) / 1_000_000;
+}
 
 export function Dashboard() {
-  const [expandedRow, setExpandedRow] = useState<string | null>(null); 
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('Strategies');
-  
-  const [adaBalance, setAdaBalance] = useState(1000); 
-  const [ssAdaBalance, setSsAdaBalance] = useState(0); 
+
+  const { connected } = useWallet();
+  const lovelace = useLovelace();
+  const walletAda = lovelaceToAda(lovelace);
+
+  const [ssAdaBalance, setSsAdaBalance] = useState(0);
   const [depositAmount, setDepositAmount] = useState("");
-  
+
   const pricePerShare = 1.025;
   
   const strategies = [
@@ -60,9 +70,10 @@ export function Dashboard() {
   ];
 
   const handleDeposit = () => {
+    if (!connected) return;
     const amount = parseFloat(depositAmount);
-    if (!isNaN(amount) && amount > 0 && amount <= adaBalance) {
-      setAdaBalance(prev => prev - amount);
+    if (!isNaN(amount) && amount > 0 && amount <= walletAda) {
+      // Demo: locally track ssADA minted (real tx will be wired to smart contract)
       setSsAdaBalance(prev => prev + (amount / pricePerShare));
       setDepositAmount("");
     }
@@ -70,7 +81,6 @@ export function Dashboard() {
 
   const handleWithdraw = () => {
     if (ssAdaBalance > 0) {
-      setAdaBalance(prev => prev + (ssAdaBalance * pricePerShare));
       setSsAdaBalance(0);
     }
   };
@@ -100,9 +110,7 @@ export function Dashboard() {
               <Moon size={20} weight="regular" />
            </button>
            <div className="w-px h-6 bg-gray-200 mx-1" />
-           <button className="flex items-center gap-2 h-10 rounded-lg bg-[#000] px-5 ml-1 text-[14px] font-semibold text-white shadow-sm transition-all hover:bg-gray-800">
-             <Wallet size={18} /> Connect wallet
-           </button>
+           <WalletConnect />
         </div>
       </nav>
 
@@ -247,24 +255,35 @@ export function Dashboard() {
                                    </div>
 
                                    <div className="space-y-6 max-w-sm">
-                                      <div className="relative">
-                                         <input 
-                                            type="number"
-                                            value={depositAmount}
-                                            onChange={(e) => setDepositAmount(e.target.value)}
-                                            placeholder="0.0"
-                                            className="w-full bg-white border border-gray-300 rounded-[0.5rem] py-3 pl-3 pr-16 text-[15px] font-semibold outline-none focus:border-[#0033AD] transition-all shadow-sm"
-                                         />
-                                         <span className="absolute right-4 top-3 font-semibold text-gray-400">ADA</span>
-                                         <div className="text-[12px] text-gray-400 mt-2 text-right">Wallet: {adaBalance.toFixed(2)} ADA</div>
-                                      </div>
+                                      {!connected ? (
+                                        <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 py-6 text-center">
+                                          <p className="text-[13px] text-gray-500 mb-3">Connect your wallet to deposit</p>
+                                          <WalletConnect />
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <div className="relative">
+                                            <input
+                                              type="number"
+                                              value={depositAmount}
+                                              onChange={(e) => setDepositAmount(e.target.value)}
+                                              placeholder="0.0"
+                                              className="w-full bg-white border border-gray-300 rounded-[0.5rem] py-3 pl-3 pr-16 text-[15px] font-semibold outline-none focus:border-[#0033AD] transition-all shadow-sm"
+                                            />
+                                            <span className="absolute right-4 top-3 font-semibold text-gray-400">ADA</span>
+                                            <div className="text-[12px] text-gray-400 mt-2 text-right">
+                                              Wallet: {walletAda.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ADA
+                                            </div>
+                                          </div>
 
-                                      <button 
-                                        onClick={handleDeposit}
-                                        className="w-full rounded-[0.5rem] bg-[#0033AD] py-3.5 text-[15px] font-bold text-white shadow-md transition-transform active:scale-[0.98] hover:bg-blue-800"
-                                      >
-                                         Mint ssADA
-                                      </button>
+                                          <button
+                                            onClick={handleDeposit}
+                                            className="w-full rounded-[0.5rem] bg-[#0033AD] py-3.5 text-[15px] font-bold text-white shadow-md transition-transform active:scale-[0.98] hover:bg-blue-800"
+                                          >
+                                            Mint ssADA
+                                          </button>
+                                        </>
+                                      )}
 
                                       {ssAdaBalance > 0 && (
                                         <div className="pt-4 border-t border-gray-100 flex justify-between items-center text-sm">
