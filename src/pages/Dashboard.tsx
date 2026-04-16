@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { CaretDown, Moon, MagnifyingGlass, CheckCircle, Copy, Faders, ArrowsLeftRight } from "@phosphor-icons/react";
 import { useWallet, useLovelace } from "@meshsdk/react";
 import { WalletConnect } from "../components/WalletConnect";
+import { useStrategyRecommendation } from "../hooks/useStrategyRecommendation";
+import { ORACLE_CONTRACT_ADDRESS } from "../services/charli3OracleService";
 
 function lovelaceToAda(lovelace: string | undefined): number {
   if (!lovelace) return 0;
@@ -20,14 +22,49 @@ export function Dashboard() {
 
   const [ssAdaBalance, setSsAdaBalance] = useState(0);
   const [depositAmount, setDepositAmount] = useState("");
+  const [rebalanceNotice, setRebalanceNotice] = useState<string | null>(null);
+
+  const recommendation = useStrategyRecommendation();
+
+  // Show rebalance banner for 8 seconds when oracle triggers a strategy switch
+  useEffect(() => {
+    if (recommendation.shouldRebalance) {
+      setRebalanceNotice(recommendation.reason);
+      const t = setTimeout(() => setRebalanceNotice(null), 8000);
+      return () => clearTimeout(t);
+    }
+  }, [recommendation.shouldRebalance, recommendation.reason]);
 
   const pricePerShare = 1.025;
-  
+
+  const liqwidAPY   = recommendation.allStrategies.find((s) => s.id === "liqwid")?.apy   ?? 0.125;
+  const stakingAPY  = recommendation.allStrategies.find((s) => s.id === "staking")?.apy  ?? 0.042;
+  const minswapAPY  = recommendation.allStrategies.find((s) => s.id === "minswap")?.apy  ?? 0.28;
+  const bestAPY     = recommendation.allStrategies.find((s) => s.id === recommendation.currentBest)?.apy ?? 0.125;
+
   const strategies = [
     { name: "BlueSense Target Reserve", apy: "0%", color: "#93c5fd", percentage: "10%", tvl: "$425,000" },
-    { name: "Liqwid ADA Lending (Active)", apy: "12.5%", color: "#0033AD", percentage: "90%", tvl: "$3,825,000" },
-    { name: "Cardano Native Staking", apy: "4.2%", color: "#dbeafe", percentage: "0%", tvl: "$0.00" },
-    { name: "Minswap ADA/MIN LP", apy: "28.0%", color: "#dbeafe", percentage: "0%", tvl: "$0.00" },
+    {
+      name: `Liqwid ADA Lending${recommendation.activeStrategy === "liqwid" ? " (Active)" : ""}`,
+      apy: `${(liqwidAPY * 100).toFixed(1)}%`,
+      color: recommendation.activeStrategy === "liqwid" ? "#0033AD" : "#dbeafe",
+      percentage: recommendation.activeStrategy === "liqwid" ? "90%" : "0%",
+      tvl: recommendation.activeStrategy === "liqwid" ? "$3,825,000" : "$0.00",
+    },
+    {
+      name: `Cardano Native Staking${recommendation.activeStrategy === "staking" ? " (Active)" : ""}`,
+      apy: `${(stakingAPY * 100).toFixed(1)}%`,
+      color: recommendation.activeStrategy === "staking" ? "#0033AD" : "#dbeafe",
+      percentage: "0%",
+      tvl: "$0.00",
+    },
+    {
+      name: `Minswap ADA/MIN LP${recommendation.activeStrategy === "minswap" ? " (Active)" : ""}`,
+      apy: `${(minswapAPY * 100).toFixed(1)}%`,
+      color: recommendation.activeStrategy === "minswap" ? "#0033AD" : "#dbeafe",
+      percentage: "0%",
+      tvl: "$0.00",
+    },
   ];
 
   const vaults = [
@@ -36,7 +73,7 @@ export function Dashboard() {
       name: "ssADA",
       labels: ["Cardano", "Auto-Compound", "Single Asset"],
       fees: "0% | 0%",
-      apy: "12.5%",
+      apy: `${(bestAPY * 100).toFixed(1)}%`,
       tvl: "$4.25M",
       hasCheck: true
     },
@@ -120,6 +157,61 @@ export function Dashboard() {
         <div className="text-[13px] text-gray-500 mb-8">
            <Link to="/" className="hover:text-gray-900 transition-colors">Home</Link> <span className="mx-2 text-gray-300">&gt;</span> <span className="text-gray-900 font-medium">Vaults</span>
         </div>
+
+        {/* Oracle Feed Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-gray-200 rounded-xl px-5 py-3 mb-5 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${recommendation.isLive ? "bg-emerald-500 animate-pulse" : "bg-amber-400 animate-pulse"}`} />
+            <span className="text-[13px] font-semibold text-gray-700">
+              {recommendation.isLive ? "Charli3 Oracle — Live" : "Charli3 Oracle — Demo Mode"}
+            </span>
+            {!recommendation.isLive && (
+              <span className="text-[11px] bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
+                Mock Data
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-4 text-[13px]">
+            <span className="text-gray-500">
+              ADA/USD{" "}
+              <span className="font-bold text-gray-900">
+                ${recommendation.adaPrice.toFixed(3)}
+              </span>
+            </span>
+            <span className="text-gray-500">
+              MIN/USD{" "}
+              <span className="font-bold text-gray-900">
+                ${recommendation.minPrice.toFixed(4)}
+              </span>
+            </span>
+            <span className="hidden xl:inline text-gray-400 font-mono text-[11px]">
+              Feed: {ORACLE_CONTRACT_ADDRESS.slice(0, 22)}…
+            </span>
+            {recommendation.lastUpdated && (
+              <span className="text-gray-400 text-[11px]">
+                Updated {Math.floor((Date.now() - recommendation.lastUpdated.getTime()) / 1000)}s ago
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Rebalance Notification Banner */}
+        <AnimatePresence>
+          {rebalanceNotice && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="flex items-start gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3.5 mb-5 shadow-sm"
+            >
+              <span className="text-emerald-500 mt-0.5 flex-shrink-0">⚡</span>
+              <div>
+                <p className="text-[13px] font-bold text-emerald-800">Oracle Triggered Rebalancing</p>
+                <p className="text-[12px] text-emerald-700 mt-0.5">{rebalanceNotice}</p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Filter Row */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
@@ -249,9 +341,41 @@ export function Dashboard() {
                                       Cardano denominated, cross-protocol, cross-asset vault. Optionally lock shares to earn a higher yield by allowing the vault to take on longer duration positions.
                                    </p>
                                    
-                                   <div className="flex items-center gap-2 text-[13px] text-gray-500 mb-8 pb-8 border-b border-gray-100">
+                                   <div className="flex items-center gap-2 text-[13px] text-gray-500 mb-4 pb-4 border-b border-gray-100">
                                      <span className="font-mono">0x696d02Db93291651ED51...</span>
                                      <button className="hover:text-gray-900 transition-colors"><Copy size={16} /></button>
+                                   </div>
+
+                                   {/* Oracle Feed Detail */}
+                                   <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6">
+                                     <div className="flex items-center gap-2 mb-3">
+                                       <span className={`w-1.5 h-1.5 rounded-full ${recommendation.isLive ? "bg-emerald-500" : "bg-amber-400"}`} />
+                                       <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                                         Charli3 Pull Oracle
+                                       </span>
+                                     </div>
+                                     <div className="grid grid-cols-2 gap-3 text-[12px] mb-3">
+                                       <div>
+                                         <p className="text-gray-400 mb-0.5">ADA/USD</p>
+                                         <p className="font-bold text-gray-900">${recommendation.adaPrice.toFixed(3)}</p>
+                                       </div>
+                                       <div>
+                                         <p className="text-gray-400 mb-0.5">MIN/USD</p>
+                                         <p className="font-bold text-gray-900">${recommendation.minPrice.toFixed(4)}</p>
+                                       </div>
+                                       <div>
+                                         <p className="text-gray-400 mb-0.5">Active Strategy</p>
+                                         <p className="font-bold text-[#0033AD] capitalize">{recommendation.activeStrategy}</p>
+                                       </div>
+                                       <div>
+                                         <p className="text-gray-400 mb-0.5">Best APY</p>
+                                         <p className="font-bold text-emerald-600">{(bestAPY * 100).toFixed(1)}%</p>
+                                       </div>
+                                     </div>
+                                     <p className="text-[11px] text-gray-400 font-mono truncate">
+                                       Feed: {ORACLE_CONTRACT_ADDRESS.slice(0, 28)}…
+                                     </p>
+                                     <p className="text-[11px] text-gray-400 mt-1.5 italic">{recommendation.reason}</p>
                                    </div>
 
                                    <div className="space-y-6 max-w-sm">
