@@ -22,7 +22,38 @@ export function WalletConnect() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [detectedWallets, setDetectedWallets] = useState(wallets);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Re-scan window.cardano when modal opens (extensions may inject after page load)
+  useEffect(() => {
+    if (!modalOpen) return;
+    setDetectedWallets(wallets);
+    if (wallets.length > 0) return;
+
+    let attempts = 0;
+    const interval = setInterval(() => {
+      const cardano = (window as any).cardano;
+      if (cardano) {
+        const found = Object.keys(cardano)
+          .filter((k) => cardano[k] && typeof cardano[k].enable === "function")
+          .map((k) => ({
+            name: k,
+            icon: cardano[k].icon ?? "",
+            version: cardano[k].apiVersion ?? "",
+          }));
+        if (found.length > 0) {
+          setDetectedWallets(found as any);
+          clearInterval(interval);
+          return;
+        }
+      }
+      attempts++;
+      if (attempts >= 10) clearInterval(interval);
+    }, 300);
+
+    return () => clearInterval(interval);
+  }, [modalOpen, wallets]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -64,9 +95,10 @@ export function WalletConnect() {
                 Select your Cardano wallet to continue
               </p>
 
-              {wallets.length === 0 ? (
+              {detectedWallets.length === 0 ? (
                 <div className="text-center py-6">
                   <p className="text-[14px] text-gray-500 mb-4">No Cardano wallet detected.</p>
+                  <p className="text-[12px] text-gray-400 mb-4">Scanning for wallets...</p>
                   <a
                     href="https://namiwallet.io"
                     target="_blank"
@@ -78,7 +110,7 @@ export function WalletConnect() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {wallets.map((w) => (
+                  {detectedWallets.map((w) => (
                     <button
                       key={w.name}
                       onClick={async () => {
