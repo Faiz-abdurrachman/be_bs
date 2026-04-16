@@ -5,7 +5,9 @@ import { CaretDown, Moon, MagnifyingGlass, CheckCircle, Copy, Faders, ArrowsLeft
 import { useWallet, useLovelace } from "@meshsdk/react";
 import { WalletConnect } from "../components/WalletConnect";
 import { useStrategyRecommendation } from "../hooks/useStrategyRecommendation";
-import { ORACLE_CONTRACT_ADDRESS } from "../services/charli3OracleService";
+import { ORACLE_CONTRACT_ADDRESS, } from "../services/charli3OracleService";
+import { forceRebalanceTo, type Strategy } from "../services/strategyRouter";
+import { RebalanceAnimation } from "../components/RebalanceAnimation";
 
 function lovelaceToAda(lovelace: string | undefined): number {
   if (!lovelace) return 0;
@@ -23,8 +25,19 @@ export function Dashboard() {
   const [ssAdaBalance, setSsAdaBalance] = useState(0);
   const [depositAmount, setDepositAmount] = useState("");
   const [rebalanceNotice, setRebalanceNotice] = useState<string | null>(null);
+  const [demoRebalance, setDemoRebalance] = useState<{ from: Strategy; to: Strategy } | null>(null);
 
   const recommendation = useStrategyRecommendation();
+
+  const handleForceRebalance = () => {
+    const current = recommendation.allStrategies.find((s) => s.id === recommendation.activeStrategy);
+    const best = recommendation.allStrategies
+      .filter((s) => s.id !== recommendation.activeStrategy)
+      .reduce((a, b) => (a.apy > b.apy ? a : b));
+    if (!current) return;
+    forceRebalanceTo(best.id);
+    setDemoRebalance({ from: current, to: best });
+  };
 
   // Show rebalance banner for 8 seconds when oracle triggers a strategy switch
   useEffect(() => {
@@ -192,6 +205,12 @@ export function Dashboard() {
                 Updated {Math.floor((Date.now() - recommendation.lastUpdated.getTime()) / 1000)}s ago
               </span>
             )}
+            <button
+              onClick={handleForceRebalance}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0033AD] hover:bg-blue-700 text-white text-[12px] font-bold rounded-lg transition-colors shadow-sm flex-shrink-0"
+            >
+              <span>⚡</span> Force Rebalance
+            </button>
           </div>
         </div>
 
@@ -499,6 +518,19 @@ export function Dashboard() {
         </div>
 
       </div>
+
+      {/* Rebalancing Demo Overlay */}
+      <AnimatePresence>
+        {demoRebalance && (
+          <RebalanceAnimation
+            fromStrategy={demoRebalance.from}
+            toStrategy={demoRebalance.to}
+            adaPrice={recommendation.adaPrice}
+            minPrice={recommendation.minPrice}
+            onClose={() => setDemoRebalance(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
