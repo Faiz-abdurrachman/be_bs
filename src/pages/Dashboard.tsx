@@ -5,9 +5,10 @@ import { CaretDown, Moon, MagnifyingGlass, CheckCircle, Copy, Faders, ArrowsLeft
 import { useWallet, useLovelace } from "@meshsdk/react";
 import { WalletConnect } from "../components/WalletConnect";
 import { useStrategyRecommendation } from "../hooks/useStrategyRecommendation";
-import { ORACLE_CONTRACT_ADDRESS, } from "../services/charli3OracleService";
+import { ORACLE_CONTRACT_ADDRESS } from "../services/charli3OracleService";
 import { forceRebalanceTo, type Strategy } from "../services/strategyRouter";
 import { RebalanceAnimation } from "../components/RebalanceAnimation";
+import { buildDepositTx, buildWithdrawTx } from "../services/vaultService";
 
 function lovelaceToAda(lovelace: string | undefined): number {
   if (!lovelace) return 0;
@@ -18,14 +19,18 @@ export function Dashboard() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('Strategies');
 
-  const { connected } = useWallet();
+  const { connected, wallet } = useWallet();
   const lovelace = useLovelace();
   const walletAda = lovelaceToAda(lovelace);
 
   const [ssAdaBalance, setSsAdaBalance] = useState(0);
+  const [ssAdaTokens, setSsAdaTokens] = useState(0n);
   const [depositAmount, setDepositAmount] = useState("");
   const [rebalanceNotice, setRebalanceNotice] = useState<string | null>(null);
   const [demoRebalance, setDemoRebalance] = useState<{ from: Strategy; to: Strategy } | null>(null);
+  const [txStatus, setTxStatus] = useState<"idle" | "pending" | "success" | "error">("idle");
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [txError, setTxError] = useState<string | null>(null);
 
   const recommendation = useStrategyRecommendation();
 
@@ -119,19 +124,42 @@ export function Dashboard() {
     }
   ];
 
-  const handleDeposit = () => {
-    if (!connected) return;
+  const handleDeposit = async () => {
+    if (!connected || !wallet) return;
     const amount = parseFloat(depositAmount);
-    if (!isNaN(amount) && amount > 0 && amount <= walletAda) {
-      // Demo: locally track ssADA minted (real tx will be wired to smart contract)
-      setSsAdaBalance(prev => prev + (amount / pricePerShare));
+    if (isNaN(amount) || amount <= 0 || amount > walletAda) return;
+
+    setTxStatus("pending");
+    setTxHash(null);
+    setTxError(null);
+    try {
+      const result = await buildDepositTx(wallet, amount);
+      setSsAdaBalance((prev) => prev + amount / pricePerShare);
+      setSsAdaTokens((prev) => prev + result.ssadaMinted);
+      setTxHash(result.txHash);
+      setTxStatus("success");
       setDepositAmount("");
+    } catch (err) {
+      setTxError(err instanceof Error ? err.message : "Transaction failed");
+      setTxStatus("error");
     }
   };
 
-  const handleWithdraw = () => {
-    if (ssAdaBalance > 0) {
+  const handleWithdraw = async () => {
+    if (!connected || !wallet || ssAdaTokens === 0n) return;
+
+    setTxStatus("pending");
+    setTxHash(null);
+    setTxError(null);
+    try {
+      const result = await buildWithdrawTx(wallet, ssAdaTokens);
       setSsAdaBalance(0);
+      setSsAdaTokens(0n);
+      setTxHash(result.txHash);
+      setTxStatus("success");
+    } catch (err) {
+      setTxError(err instanceof Error ? err.message : "Transaction failed");
+      setTxStatus("error");
     }
   };
 
@@ -421,17 +449,56 @@ export function Dashboard() {
 
                                           <button
                                             onClick={handleDeposit}
-                                            className="w-full rounded-[0.5rem] bg-[#0033AD] py-3.5 text-[15px] font-bold text-white shadow-md transition-transform active:scale-[0.98] hover:bg-blue-800"
+                                            disabled={txStatus === "pending"}
+                                            className="w-full rounded-[0.5rem] bg-[#0033AD] py-3.5 text-[15px] font-bold text-white shadow-md transition-transform active:scale-[0.98] hover:bg-blue-800 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                           >
-                                            Mint ssADA
+                                            {txStatus === "pending" ? (
+                                              <>
+                                                <svg className="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
+                                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                                                </svg>
+                                                Submitting…
+                                              </>
+                                            ) : "Mint ssADA"}
                                           </button>
+
+                                          {txStatus === "success" && txHash && (
+                                            <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2.5 text-[12px]">
+                                              <p className="font-bold text-emerald-700 mb-1">✓ Transaction submitted</p>
+                                              <a
+                                                href={`https://preprod.cardanoscan.io/transaction/${txHash}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="font-mono text-[#0033AD] hover:underline break-all"
+                                              >
+                                                {txHash.slice(0, 20)}…{txHash.slice(-8)}
+                                              </a>
+                                            </div>
+                                          )}
+
+                                          {txStatus === "error" && txError && (
+                                            <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-[12px]">
+                                              <p className="font-bold text-red-700 mb-0.5">Transaction failed</p>
+                                              <p className="text-red-600">{txError}</p>
+                                            </div>
+                                          )}
                                         </>
                                       )}
 
                                       {ssAdaBalance > 0 && (
                                         <div className="pt-4 border-t border-gray-100 flex justify-between items-center text-sm">
-                                          <span className="font-semibold text-gray-900">Position: <span className="text-[#0033AD]">{ssAdaBalance.toFixed(2)} ssADA</span></span>
-                                          <button onClick={handleWithdraw} className="text-red-500 font-bold text-[13px] hover:underline uppercase tracking-wide">Withdraw</button>
+                                          <span className="font-semibold text-gray-900">
+                                            Position:{" "}
+                                            <span className="text-[#0033AD]">{ssAdaBalance.toFixed(2)} ssADA</span>
+                                          </span>
+                                          <button
+                                            onClick={handleWithdraw}
+                                            disabled={txStatus === "pending"}
+                                            className="text-red-500 font-bold text-[13px] hover:underline uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
+                                          >
+                                            {txStatus === "pending" ? "…" : "Withdraw"}
+                                          </button>
                                         </div>
                                       )}
                                    </div>
